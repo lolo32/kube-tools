@@ -1,0 +1,215 @@
+---
+# Secret containing registry credentials
+kind: secret
+name: registry
+get:
+  path: registries
+  name: quay-io.conf
+
+---
+# Build image for AMD64
+kind: pipeline
+type: docker
+name: build-amd64
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+- name: credential
+  image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4 # 3.17.0
+  volumes:
+  - name: dockercredentials
+    path: /root/.docker
+  environment:
+    REGISTRY:
+      from_secret: registry
+  commands:
+    - /bin/echo $${REGISTRY} > ~/.docker/config.json
+- name: build-push
+  image: docker.io/docker@sha256:80e81aecd51d80e63ae4cbbd5eb1968e84edd151b90ef2c2f17e1004c7a3832b # 20-dind
+  volumes:
+  - name: dockersock
+    path: /var/run
+  - name: dockercredentials
+    path: /root/.docker
+  commands:
+    # Wait that the docker daemon start
+    - while ! /usr/local/bin/docker images -q; do /bin/sleep 1; done
+    # Display docker version (for CI log)
+    - /usr/local/bin/docker version
+    - /usr/local/bin/docker info
+    # Build and push image
+    - /usr/local/bin/docker build -t quay.io/lolo32/kube-tools:${DRONE_TAG##v}-amd64 --rm=true -f Dockerfile . --pull=true --label org.opencontainers.image.created=$$(/bin/date --utc +"%Y-%m-%dT%H:%M:%SZ") --label org.opencontainers.image.revision=${DRONE_COMMIT} --label org.opencontainers.image.source=${DRONE_GIT_HTTP_URL}
+    - /usr/local/bin/docker push quay.io/lolo32/kube-tools:${DRONE_TAG##v}-amd64
+    # Save .RepoDigest for next step
+    - /usr/local/bin/docker image inspect --format "{{index .RepoDigests 0}}" quay.io/lolo32/kube-tools:${DRONE_TAG##v}-amd64 > image.sha256
+- name: sign
+  image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4 # 3.17.0
+  volumes:
+  - name: dockercredentials
+    path: /root/.docker
+  environment:
+    COSIGN_EXPERIMENTAL: "1"
+  commands:
+    # Install Cosign
+    - apk add curl
+    - curl -sSLo /usr/local/bin/cosign https://github.com/sigstore/cosign/releases/download/v1.13.1/cosign-linux-amd64 -sSLO https://github.com/sigstore/cosign/releases/download/v1.13.1/cosign-linux-amd64.sig
+    - chmod 0755 /usr/local/bin/cosign
+    - /usr/local/bin/cosign verify-blob --key release-cosign.pub --signature cosign-linux-amd64.sig /usr/local/bin/cosign
+    # Sign the .RepoDigest
+    - cosign sign "$$(cat image.sha256)"
+
+services:
+- name: docker
+  image: docker.io/docker@sha256:80e81aecd51d80e63ae4cbbd5eb1968e84edd151b90ef2c2f17e1004c7a3832b # 20-dind
+  privileged: true
+  volumes:
+  - name: dockersock
+    path: /var/run
+
+volumes:
+- name: dockersock
+  temp: {}
+- name: dockercredentials
+  temp: {}
+
+---
+# Build image for ARM64
+kind: pipeline
+type: docker
+name: build-arm64
+
+platform:
+  os: linux
+  arch: arm64
+
+steps:
+- name: credential
+  image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4 # 3.17.0
+  volumes:
+  - name: dockercredentials
+    path: /root/.docker
+  environment:
+    REGISTRY:
+      from_secret: registry
+  commands:
+    - /bin/echo $${REGISTRY} > ~/.docker/config.json
+- name: build-push
+  image: docker.io/docker@sha256:80e81aecd51d80e63ae4cbbd5eb1968e84edd151b90ef2c2f17e1004c7a3832b # 20-dind
+  volumes:
+  - name: dockersock
+    path: /var/run
+  - name: dockercredentials
+    path: /root/.docker
+  commands:
+    # Wait that the docker daemon start
+    - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
+    # Display docker version (for CI log)
+    - /usr/local/bin/docker version
+    - /usr/local/bin/docker info
+    # Build and push image
+    - /usr/local/bin/docker build -t quay.io/lolo32/kube-tools:${DRONE_TAG##v}-arm64 --rm=true -f Dockerfile . --pull=true --label org.opencontainers.image.created=$$(/bin/date --utc +"%Y-%m-%dT%H:%M:%SZ") --label org.opencontainers.image.revision=${DRONE_COMMIT} --label org.opencontainers.image.source=${DRONE_GIT_HTTP_URL}
+    - /usr/local/bin/docker push quay.io/lolo32/kube-tools:${DRONE_TAG##v}-arm64
+    # Save .RepoDigest for next step
+    - /usr/local/bin/docker image inspect --format "{{index .RepoDigests 0}}" quay.io/lolo32/kube-tools:${DRONE_TAG##v}-arm64 > image.sha256
+- name: sign
+  image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4 # 3.17.0
+  volumes:
+  - name: dockercredentials
+    path: /root/.docker
+  environment:
+    COSIGN_EXPERIMENTAL: "1"
+  commands:
+    # Install Cosign
+    - apk add curl
+    - curl -sSLo /usr/local/bin/cosign https://github.com/sigstore/cosign/releases/download/v1.13.1/cosign-linux-arm64 -sSLO https://github.com/sigstore/cosign/releases/download/v1.13.1/cosign-linux-arm64.sig
+    - chmod 0755 /usr/local/bin/cosign
+    - /usr/local/bin/cosign verify-blob --key release-cosign.pub --signature cosign-linux-arm64.sig /usr/local/bin/cosign
+    # Sign the .RepoDigest
+    - cosign sign "$$(cat image.sha256)"
+
+services:
+- name: docker
+  image: docker.io/docker@sha256:80e81aecd51d80e63ae4cbbd5eb1968e84edd151b90ef2c2f17e1004c7a3832b # 20-dind
+  privileged: true
+  volumes:
+  - name: dockersock
+    path: /var/run
+
+volumes:
+- name: dockersock
+  temp: {}
+- name: dockercredentials
+  temp: {}
+
+---
+# Manifest multi-architecture
+kind: pipeline
+type: docker
+name: manifest
+
+depends_on:
+  - build-amd64
+  - build-arm64
+
+steps:
+- name: credential
+  image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4 # 3.17.0
+  volumes:
+  - name: dockercredentials
+    path: /root/.docker
+  environment:
+    REGISTRY:
+      from_secret: registry
+  commands:
+    - /bin/echo $${REGISTRY} > ~/.docker/config.json
+- name: manifest
+  image: docker.io/docker@sha256:80e81aecd51d80e63ae4cbbd5eb1968e84edd151b90ef2c2f17e1004c7a3832b # 20-dind
+  volumes:
+  - name: dockersock
+    path: /var/run
+  - name: dockercredentials
+    path: /root/.docker
+  commands:
+    # Wait that the docker daemon start
+    - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
+    # Display docker version (for CI log)
+    - /usr/local/bin/docker version
+    - /usr/local/bin/docker info
+    # Multi-architecture tag
+    - /usr/local/bin/docker manifest create quay.io/lolo32/kube-tools:${DRONE_TAG##v} quay.io/lolo32/kube-tools:${DRONE_TAG##v}-amd64 quay.io/lolo32/kube-tools:${DRONE_TAG##v}-arm64
+    - /usr/local/bin/docker manifest push --purge quay.io/lolo32/kube-tools:${DRONE_TAG##v}
+    # Save .RepoDigest for next step
+    - /usr/local/bin/docker pull quay.io/lolo32/kube-tools:${DRONE_TAG##v}
+    - /usr/local/bin/docker inspect --format "{{index .RepoDigests 0}}" quay.io/lolo32/kube-tools:${DRONE_TAG##v} > image.sha256
+- name: sign
+  image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4 # 3.17.0
+  volumes:
+  - name: dockercredentials
+    path: /root/.docker
+  environment:
+    COSIGN_EXPERIMENTAL: "1"
+  commands:
+    # Install Cosign
+    - apk add curl
+    - curl -sSLo /usr/local/bin/cosign https://github.com/sigstore/cosign/releases/download/v1.13.1/cosign-linux-arm64 -sSLO https://github.com/sigstore/cosign/releases/download/v1.13.1/cosign-linux-arm64.sig
+    - chmod 0755 /usr/local/bin/cosign
+    - /usr/local/bin/cosign verify-blob --key release-cosign.pub --signature cosign-linux-arm64.sig /usr/local/bin/cosign
+    # Sign the .RepoDigest
+    - cosign sign "$$(cat image.sha256)"
+
+services:
+- name: docker
+  image: docker.io/docker@sha256:80e81aecd51d80e63ae4cbbd5eb1968e84edd151b90ef2c2f17e1004c7a3832b # 20-dind
+  privileged: true
+  volumes:
+  - name: dockersock
+    path: /var/run
+
+volumes:
+- name: dockersock
+  temp: {}
+- name: dockercredentials
+  temp: {}
