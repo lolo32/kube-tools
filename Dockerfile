@@ -1,4 +1,9 @@
-FROM alpine:3.17.0
+FROM gcr.io/projectsigstore/cosign:v1.13.0 as cosign-bin
+
+# 3.17.0
+FROM alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4
+
+COPY --from=cosign-bin /ko-app/cosign /usr/local/bin/cosign
 
 # https://dl.k8s.io/release/stable.txt
 # https://github.com/helm/helm/releases
@@ -26,12 +31,12 @@ RUN \
     \
     echo "Installing kubectl for ${ARCH}" && \
     cd /tmp && \
-    curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
+    curl -sSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
     echo "${KUBECTL_SHA256}  kubectl" | sha256sum -c && \
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
     \
     echo "Installing Helm for ${ARCH}" && \
-    curl -LO "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" && \
+    curl -sSLO "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" && \
     echo "${HELM_SHA256}  helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" | sha256sum -c && \
     tar xvf "helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" --strip-components 1 linux-${ARCH}/helm && \
     install -o root -g root -m 0755 helm /usr/local/bin/helm && \
