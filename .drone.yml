@@ -43,7 +43,7 @@ steps:
         path: /var/run
     commands:
       # Wait that the docker daemon start
-      - while ! [-e /var/run/docker.sock]; do /bin/sleep 0.5; done
+      - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
       # Display docker version (for CI log)
       - /usr/local/bin/docker version
       - /usr/local/bin/docker info
@@ -143,7 +143,7 @@ steps:
         path: /var/run
     commands:
       # Wait that the docker daemon start
-      - while ! [-e /var/run/docker.sock]; do /bin/sleep 0.5; done
+      - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
       # Display docker version (for CI log)
       - /usr/local/bin/docker version
       - /usr/local/bin/docker info
