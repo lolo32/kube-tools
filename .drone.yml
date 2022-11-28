@@ -15,15 +15,7 @@ platform:
   os: linux
   arch: amd64
 
-clone:
-  disable: true
-
 steps:
-  - name: clone
-    image: alpine/git
-    commands:
-      - git clone ${DRONE_GIT_HTTP_URL} .
-      - git checkout $DRONE_COMMIT
   - name: credential
     # 3.17.0
     image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4
@@ -114,16 +106,7 @@ platform:
   os: linux
   arch: arm64
 
-clone:
-  disable: true
-
 steps:
-  - name: clone
-    # 2.36.3
-    image: alpine/git@sha256:66b210a97bc07bfd4019826bcd13a488b371a6cbe2630a4b37d23275658bd3f2
-    commands:
-      - git clone ${DRONE_GIT_HTTP_URL} .
-      - git checkout $DRONE_COMMIT
   - name: credential
     # 3.17.0
     image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4
