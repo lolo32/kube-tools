@@ -34,6 +34,7 @@ steps:
       - name: dockersock
         path: /var/run
     commands:
+      - echo Waiting for docker-service to be up
       # Wait that the docker daemon start
       - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
       # Display docker version (for CI log)
@@ -125,6 +126,7 @@ steps:
       - name: dockersock
         path: /var/run
     commands:
+      - echo Waiting for docker-service to be up
       # Wait that the docker daemon start
       - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
       # Display docker version (for CI log)
@@ -191,7 +193,7 @@ volumes:
 # Manifest multi-architecture
 kind: pipeline
 type: docker
-name: manifest
+name: manifest-sign
 
 depends_on:
   - build-amd64
@@ -202,6 +204,10 @@ trigger:
     - tag
   ref:
     - refs/tags/v*
+
+platform:
+  os: linux
+  arch: arm64
 
 steps:
   - name: credential
@@ -224,6 +230,7 @@ steps:
       - name: dockercredentials
         path: /root/.docker
     commands:
+      - echo Waiting for docker-service to be up
       # Wait that the docker daemon start
       - while ! [ -e /var/run/docker.sock ]; do /bin/sleep 0.5; done
       # Display docker version (for CI log)
