@@ -30,22 +30,9 @@ platform:
   arch: arm64
 
 steps:
-  - name: credential
-    # 3.17.0
-    image: docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4
-    volumes:
-      - name: dockercredentials
-        path: /root/.docker
-    environment:
-      REGISTRY:
-        from_secret: registry
-    commands:
-      - /bin/echo $${REGISTRY} > ~/.docker/config.json
   - name: configure-docker
-    # 20
+    # docker:20
     image: docker.io/docker@sha256:83b5f0a88fc82a724c1ffdc4220e49aed855e7db3f30ab0ac3d27c515346caca
-    depends_on:
-      - credential
     volumes:
       - name: dockercredentials
         path: /root/.docker
@@ -55,16 +42,18 @@ steps:
       DAEMON_AMD64:
         from_secret: daemon-amd64
     commands:
+      # Restore Docker registry credentials
+      - /bin/echo $${REGISTRY} > ~/.docker/config.json
       # Restore Docker contexts
       - /bin/echo $${DAEMON_ARM64} | /bin/base64 -d | /usr/local/bin/docker context import arm64daemon -
       - /bin/echo $${DAEMON_AMD64} | /bin/base64 -d | /usr/local/bin/docker context import amd64daemon -
       # Initialize buildx instance
-      - INSTANCE=$$(/usr/local/bin/docker buildx create arm64daemon)
+      - INSTANCE=$$(/usr/local/bin/docker buildx create arm64daemon --driver docker-container)
       - /usr/local/bin/docker buildx create --name $${INSTANCE} --append amd64daemon
       - /usr/local/bin/docker buildx use $${INSTANCE}
       - /usr/local/bin/docker buildx inspect --bootstrap
   - name: docker-build
-    # 20
+    # docker:20
     image: docker.io/docker@sha256:83b5f0a88fc82a724c1ffdc4220e49aed855e7db3f30ab0ac3d27c515346caca
     depends_on:
       - configure-docker
@@ -80,14 +69,13 @@ steps:
       - |
         /usr/local/bin/docker buildx build \
           --file Dockerfile \
-          --pull=true \
           --label org.opencontainers.image.created=$$(/bin/date --utc +"%Y-%m-%dT%H:%M:%SZ") \
           --label org.opencontainers.image.revision=${DRONE_COMMIT} \
           --label org.opencontainers.image.source=${DRONE_GIT_HTTP_URL} \
           --platform linux/amd64,linux/arm64 \
           .
   - name: docker-build-push
-    # 20
+    # docker:20
     image: docker.io/docker@sha256:83b5f0a88fc82a724c1ffdc4220e49aed855e7db3f30ab0ac3d27c515346caca
     depends_on:
       - configure-docker
@@ -104,7 +92,6 @@ steps:
       - |
         /usr/local/bin/docker buildx build \
           --file Dockerfile \
-          --pull=true \
           --label org.opencontainers.image.created=$$(/bin/date --utc +"%Y-%m-%dT%H:%M:%SZ") \
           --label org.opencontainers.image.revision=${DRONE_COMMIT} \
           --label org.opencontainers.image.source=${DRONE_GIT_HTTP_URL} \
@@ -125,7 +112,6 @@ steps:
         path: /root/.docker
     image: docker.io/docker@sha256:83b5f0a88fc82a724c1ffdc4220e49aed855e7db3f30ab0ac3d27c515346caca
     commands:
-      - /usr/local/bin/docker buildx ls
       # Build the image the push
       - INSTANCE=$$(/usr/local/bin/docker buildx ls | /bin/grep '*' | /usr/bin/awk '{print $1}')
       - /usr/local/bin/docker buildx rm $${INSTANCE}
