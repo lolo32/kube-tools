@@ -1,7 +1,7 @@
 FROM gcr.io/projectsigstore/cosign:v1.13.0 as cosign-bin
 
 # 3.17.0
-FROM alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4
+FROM docker.io/alpine@sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4
 
 COPY --from=cosign-bin /ko-app/cosign /usr/local/bin/cosign
 
